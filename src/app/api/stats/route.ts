@@ -1,43 +1,64 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { parseFilterParams, applyFiltersToQuery } from "@/lib/filter-utils";
 import type { OverallStats, ServiceStats } from "@/types";
 
 /**
  * GET /api/stats
  *
  * Computes SLA statistics from persisted monitoring check data.
- *
- * SLA Definition:
- * - A check is "successful" if its HTTP status code is in the 2xx range (200-299).
- * - Any non-2xx status code (4xx, 5xx) is considered a failure.
- * - Availability = (successful checks / total checks) × 100
- * - SLA target is 99.9%. If availability < 99.9%, the SLA is breached for that service.
- *
- * Latency statistics are computed only from records that have non-null latency values.
- * Records with missing latency still count toward uptime calculations.
+ * Supports optional date, time, and service filtering so stats dynamically
+ * reflect the selected analysis window.
  */
-export async function GET() {
+interface CheckRow {
+  upload_id: string;
+  service_id: string;
+  service_name: string;
+  timestamp: string;
+  status_code: number;
+  latency_ms: number | null;
+  is_healthy: boolean;
+}
+
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+
+    // Parse and validate filter parameters
+    const filterParams = parseFilterParams(searchParams);
+    if (filterParams.validationError) {
+      return NextResponse.json(
+        { error: filterParams.validationError },
+        { status: 400 }
+      );
+    }
+
     const supabase = createServerSupabaseClient();
 
-    // Fetch all monitoring checks across all pages (bypasses PostgREST 1000 row default limit)
-    // Only select columns needed for SLA calculations to minimize bandwidth
-    const checks: any[] = [];
+    // Fetch matching checks across all pages
+    const checks: CheckRow[] = [];
     const PAGE_SIZE = 1000;
     let from = 0;
     let hasMore = true;
 
     while (hasMore) {
-      const { data, error } = await supabase
+      let query = supabase
         .from("monitoring_checks")
-        .select("upload_id, service_id, service_name, timestamp, status_code, latency_ms, is_healthy")
+        .select(
+          "upload_id, service_id, service_name, timestamp, status_code, latency_ms, is_healthy"
+        )
         .order("timestamp", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
 
+      // Apply date, time, and service filters
+      query = applyFiltersToQuery(query, filterParams);
+
+      const { data, error } = await query;
+
       if (error) {
-        console.error("Error fetching checks:", error);
+        console.error("Error fetching checks for stats:", error);
         return NextResponse.json(
-          { error: "Failed to fetch monitoring data" },
+          { error: "Failed to fetch monitoring data for statistics" },
           { status: 500 }
         );
       }
@@ -54,7 +75,28 @@ export async function GET() {
       }
     }
 
+    // Handle empty results
     if (!checks || checks.length === 0) {
+      if (filterParams.hasFilters) {
+        // Filter returned 0 results
+        const emptyStats: OverallStats = {
+          total_checks: 0,
+          successful_checks: 0,
+          failed_checks: 0,
+          overall_availability_pct: 0,
+          sla_target: 99.9,
+          overall_sla_met: false,
+          services_breached_count: 0,
+          services_total_count: 0,
+          date_range: null,
+          services: [],
+          upload_id: "",
+          is_filtered: true,
+          filter_description: filterParams.filterDescription,
+        };
+        return NextResponse.json(emptyStats, { status: 200 });
+      }
+
       return NextResponse.json(
         { error: "No monitoring data found. Please upload a CSV first." },
         { status: 404 }
@@ -66,7 +108,7 @@ export async function GET() {
       string,
       {
         service_name: string;
-        checks: typeof checks;
+        checks: CheckRow[];
       }
     >();
 
@@ -166,17 +208,24 @@ export async function GET() {
         : null;
 
     const upload_id = checks[0]?.upload_id || "";
+    const overallAvailability =
+      Math.round((totalSuccessful / totalChecks) * 100 * 1000) / 1000;
+    const servicesBreached = services.filter((s) => !s.sla_met).length;
 
     const stats: OverallStats = {
       total_checks: totalChecks,
       successful_checks: totalSuccessful,
       failed_checks: totalFailed,
-      overall_availability_pct:
-        Math.round((totalSuccessful / totalChecks) * 100 * 1000) / 1000,
+      overall_availability_pct: overallAvailability,
       sla_target: SLA_TARGET,
+      overall_sla_met: overallAvailability >= SLA_TARGET,
+      services_breached_count: servicesBreached,
+      services_total_count: services.length,
       date_range: dateRange,
       services,
       upload_id,
+      is_filtered: filterParams.hasFilters,
+      filter_description: filterParams.filterDescription,
     };
 
     return NextResponse.json(stats, { status: 200 });

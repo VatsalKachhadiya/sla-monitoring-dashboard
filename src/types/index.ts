@@ -77,10 +77,25 @@ export interface OverallStats {
   failed_checks: number;
   overall_availability_pct: number;
   sla_target: number; // 99.9
+  overall_sla_met: boolean;
+  services_breached_count: number;
+  services_total_count: number;
   date_range: { start: string; end: string } | null;
   services: ServiceStats[];
   upload_id: string;
+  is_filtered?: boolean;
+  filter_description?: string | null;
 }
+
+export type SortField =
+  | "timestamp"
+  | "service"
+  | "status"
+  | "latency"
+  | "agent"
+  | "region";
+
+export type SortOrder = "asc" | "desc";
 
 // Logs query parameters
 export interface LogsQuery {
@@ -89,7 +104,11 @@ export interface LogsQuery {
   date?: string; // single date YYYY-MM-DD
   date_from?: string; // range start YYYY-MM-DD
   date_to?: string; // range end YYYY-MM-DD
+  time_from?: string; // time start HH:mm (UTC)
+  time_to?: string; // time end HH:mm (UTC)
   service_id?: string;
+  sort_by?: SortField;
+  sort_order?: SortOrder;
 }
 
 // Logs API response
@@ -99,4 +118,6 @@ export interface LogsResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  sort_by: SortField;
+  sort_order: SortOrder;
 }

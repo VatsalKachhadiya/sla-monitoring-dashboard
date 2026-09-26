@@ -5,9 +5,6 @@ import type {
   DataQualityIssue,
 } from "@/types";
 
-// Valid HTTP status codes we expect from health checks
-const VALID_STATUS_CODES = new Set([200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503, 504]);
-
 // Required CSV column headers
 const REQUIRED_COLUMNS = [
   "service_id",
@@ -122,10 +119,18 @@ export function processCSV(csvText: string): ProcessedData {
 
     // Normalize latency to milliseconds
     let latencyMs: number | null = null;
-    const rawLatency = row.latency;
-    const latencyUnit = (row.latency_unit || "ms").toLowerCase();
+    let rawLatency = (row.latency || "").trim();
+    let latencyUnit = (row.latency_unit || "ms").trim().toLowerCase();
 
-    if (rawLatency && rawLatency !== "") {
+    if (rawLatency.endsWith("ms")) {
+      latencyUnit = "ms";
+      rawLatency = rawLatency.slice(0, -2).trim();
+    } else if (rawLatency.endsWith("s")) {
+      latencyUnit = "s";
+      rawLatency = rawLatency.slice(0, -1).trim();
+    }
+
+    if (rawLatency !== "") {
       const parsedLatency = parseFloat(rawLatency);
       if (!isNaN(parsedLatency) && parsedLatency >= 0) {
         if (latencyUnit === "s") {
@@ -136,6 +141,8 @@ export function processCSV(csvText: string): ProcessedData {
         }
         // Round to 2 decimal places
         latencyMs = Math.round(latencyMs * 100) / 100;
+      } else {
+        issueCounts.missing_latency++;
       }
     } else {
       issueCounts.missing_latency++;

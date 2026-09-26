@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { Logo } from "@/components/Logo";
 import type { ProcessingResult } from "@/types";
 
 export default function UploadPage() {
@@ -17,7 +18,7 @@ export default function UploadPage() {
       setError(null);
       setResult(null);
       if (selectedFile && !selectedFile.name.endsWith(".csv")) {
-        setError("Please select a CSV file.");
+        setError("Invalid file type. Please select a .csv file.");
         return;
       }
       setFile(selectedFile);
@@ -34,6 +35,13 @@ export default function UploadPage() {
     },
     [handleFileSelect]
   );
+
+  const handleReset = () => {
+    setFile(null);
+    setResult(null);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -54,7 +62,7 @@ export default function UploadPage() {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        setError(data.error || "Upload failed. Please try again.");
+        setError(data.error || "Upload processing failed. Please check the file and try again.");
         if (data.data_quality_issues) {
           setResult(data);
         }
@@ -65,7 +73,7 @@ export default function UploadPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Network error. Please check your connection and try again."
+          : "Network or server connection error. Please try again."
       );
     } finally {
       setUploading(false);
@@ -75,7 +83,7 @@ export default function UploadPage() {
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>📊 SLA Monitor</h1>
+        <Logo href="/dashboard" />
         <nav>
           <Link href="/" className="nav-link active">
             Upload
@@ -90,12 +98,12 @@ export default function UploadPage() {
         <div className="upload-card">
           <h2>Upload Monitoring Data</h2>
           <p>
-            Upload a CSV file containing health-check logs. The data will be
-            validated, cleaned, and stored for SLA analysis.
+            Upload a CSV file containing multi-agent health check logs. Data will be
+            validated, cleaned, normalized, and persisted to Supabase PostgreSQL for SLA analysis.
           </p>
 
           {/* Drop zone */}
-          {!file && (
+          {!file && !result?.success && (
             <div
               className={`dropzone ${dragOver ? "drag-over" : ""}`}
               onDragOver={(e) => {
@@ -110,7 +118,7 @@ export default function UploadPage() {
               <div className="dropzone-text">
                 <strong>Click to browse</strong> or drag & drop
                 <br />
-                CSV files only
+                Supports standard CSV files (.csv)
               </div>
             </div>
           )}
@@ -123,41 +131,39 @@ export default function UploadPage() {
             onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
           />
 
-          {/* Selected file */}
+          {/* Selected file card */}
           {file && !result?.success && (
             <div className="file-selected">
               <span className="file-icon">📄</span>
-              <span className="file-name">{file.name}</span>
-              <span className="file-size">
-                {(file.size / 1024).toFixed(1)} KB
-              </span>
+              <div className="file-meta">
+                <span className="file-name">{file.name}</span>
+                <span className="file-size">
+                  {(file.size / 1024).toFixed(1)} KB
+                </span>
+              </div>
               <button
                 className="file-remove"
-                onClick={() => {
-                  setFile(null);
-                  setResult(null);
-                  setError(null);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-                aria-label="Remove file"
+                onClick={handleReset}
+                aria-label="Remove selected file"
+                title="Remove file"
               >
                 ✕
               </button>
             </div>
           )}
 
-          {/* Upload button */}
+          {/* Upload CTA */}
           {file && !result?.success && (
             <button
               className="upload-btn"
               onClick={handleUpload}
               disabled={uploading}
             >
-              {uploading ? "Processing..." : "Upload & Process"}
+              {uploading ? "Ingesting & Validating..." : "Upload & Process CSV"}
             </button>
           )}
 
-          {/* Progress indicator */}
+          {/* Progress state */}
           {uploading && (
             <div className="upload-progress">
               <div className="progress-bar-track">
@@ -167,88 +173,107 @@ export default function UploadPage() {
                 />
               </div>
               <div className="upload-status">
-                Uploading and processing CSV data...
+                Normalizing timestamps, reconciling latency units, and writing to database...
               </div>
             </div>
           )}
 
-          {/* Error message */}
-          {error && !result && (
-            <div className="processing-result">
-              <div className="result-header error">⚠ Processing Error</div>
-              <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-                {error}
-              </p>
+          {/* Error feedback */}
+          {error && (
+            <div className="processing-result error-banner">
+              <div className="result-header error">⚠ Ingestion Error</div>
+              <p className="error-message-text">{error}</p>
+              <button className="retry-btn" onClick={handleReset} style={{ marginTop: "12px" }}>
+                Select Another File
+              </button>
             </div>
           )}
 
-          {/* Success result */}
+          {/* Success Summary feedback */}
           {result?.success && (
             <div className="processing-result">
               <div className="result-header success">
-                ✓ CSV Processed Successfully
+                ✓ CSV Ingested & Verified Successfully
               </div>
 
-              <div className="result-stats">
+              {/* Requirement 7: Explicit rows breakdown */}
+              <div className="result-stats result-stats-5">
                 <div className="result-stat">
-                  <div className="label">Total Rows</div>
+                  <div className="label">Total Rows Received</div>
                   <div className="value">{result.total_rows_parsed.toLocaleString()}</div>
+                  <div className="stat-sub">Parsed from CSV</div>
                 </div>
                 <div className="result-stat">
-                  <div className="label">Valid Records</div>
+                  <div className="label">Valid Rows</div>
                   <div className="value" style={{ color: "var(--success)" }}>
                     {result.valid_records_inserted.toLocaleString()}
                   </div>
+                  <div className="stat-sub">Passed validation</div>
                 </div>
                 <div className="result-stat">
-                  <div className="label">Duplicates Removed</div>
+                  <div className="label">Rows Persisted</div>
+                  <div className="value" style={{ color: "var(--accent-primary)" }}>
+                    {result.valid_records_inserted.toLocaleString()}
+                  </div>
+                  <div className="stat-sub">Written to PostgreSQL</div>
+                </div>
+                <div className="result-stat">
+                  <div className="label">Duplicates Handled</div>
                   <div className="value" style={{ color: "var(--warning)" }}>
-                    {result.duplicates_removed}
+                    {result.duplicates_removed.toLocaleString()}
                   </div>
+                  <div className="stat-sub">De-duplicated</div>
                 </div>
                 <div className="result-stat">
-                  <div className="label">Invalid Skipped</div>
-                  <div className="value" style={{ color: "var(--danger)" }}>
-                    {result.invalid_records_skipped}
+                  <div className="label">Invalid / Rejected</div>
+                  <div className="value" style={{ color: result.invalid_records_skipped > 0 ? "var(--danger)" : "var(--text-muted)" }}>
+                    {result.invalid_records_skipped.toLocaleString()}
                   </div>
+                  <div className="stat-sub">{result.invalid_records_skipped > 0 ? "Skipped (logged)" : "0 rejected"}</div>
                 </div>
               </div>
 
-              <div className="result-stats">
-                <div className="result-stat">
-                  <div className="label">Services</div>
-                  <div className="value">{result.services_found.length}</div>
+              <div className="result-meta-row">
+                <div className="result-meta-pill">
+                  <span className="meta-label">Services Detected:</span>{" "}
+                  <strong>{result.services_found.length}</strong> ({result.services_found.join(", ")})
                 </div>
-                <div className="result-stat">
-                  <div className="label">Date Range</div>
-                  <div className="value" style={{ fontSize: "12px" }}>
+                <div className="result-meta-pill">
+                  <span className="meta-label">Date Window (UTC):</span>{" "}
+                  <strong>
                     {result.date_range
                       ? `${result.date_range.start.substring(0, 10)} → ${result.date_range.end.substring(0, 10)}`
                       : "N/A"}
-                  </div>
+                  </strong>
                 </div>
               </div>
 
+              {/* Data quality issues audit breakdown */}
               {result.data_quality_issues.length > 0 && (
                 <div className="data-issues">
                   <h4>
-                    Data Quality Issues Found ({result.data_quality_issues.length})
+                    Data Quality Remediation Audit ({result.data_quality_issues.length} issue types detected)
                   </h4>
                   {result.data_quality_issues.map((issue, i) => (
                     <div className="issue-item" key={i}>
                       <div className="issue-type">
-                        {issue.type.replace(/_/g, " ")} ({issue.count})
+                        {issue.type.replace(/_/g, " ")} ({issue.count.toLocaleString()})
                       </div>
                       <div className="issue-desc">{issue.description}</div>
-                      <div className="issue-action">→ {issue.action}</div>
+                      <div className="issue-action">Action: {issue.action}</div>
                     </div>
                   ))}
                 </div>
               )}
 
-              <Link href="/dashboard" className="view-dashboard-btn">
-                View Dashboard →
-              </Link>
+              <div className="upload-actions-row">
+                <Link href="/dashboard" className="view-dashboard-btn">
+                  View SLA Dashboard →
+                </Link>
+                <button className="upload-another-btn" onClick={handleReset}>
+                  Upload Another File
+                </button>
+              </div>
             </div>
           )}
         </div>

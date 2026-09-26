@@ -1,0 +1,24 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sla-mark-bg" x1="16" y1="0" x2="16" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e2433" />
+      <stop offset="100%" stop-color="#0b0f17" />
+    </linearGradient>
+    <linearGradient id="sla-mark-border" x1="16" y1="0" x2="16" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3d475c" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#1a202c" stop-opacity="0.5" />
+    </linearGradient>
+    <linearGradient id="sla-mark-stroke" x1="6" y1="21" x2="25" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+  </defs>
+  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="7.5" fill="url(#sla-mark-bg)" stroke="url(#sla-mark-border)" stroke-width="1.2" />
+  <rect x="1.75" y="1.75" width="28.5" height="28.5" rx="6.5" fill="none" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1" />
+  <rect x="7" y="17" width="2" height="5" rx="1" fill="#334155" opacity="0.55" />
+  <rect x="11" y="14" width="2" height="8" rx="1" fill="#475569" opacity="0.5" />
+  <rect x="15" y="11" width="2" height="11" rx="1" fill="#64748b" opacity="0.45" />
+  <path d="M 6.5 16.5 L 9.5 16.5 L 12 12.5 L 15 21 L 24 9" stroke="url(#sla-mark-stroke)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="24" cy="9" r="1.5" fill="#10b981" />
+  <circle cx="24" cy="9" r="3.2" fill="#10b981" fill-opacity="0.22" />
+</svg>

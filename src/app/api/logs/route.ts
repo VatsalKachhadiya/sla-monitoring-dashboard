@@ -1,67 +1,74 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
-import type { LogsResponse } from "@/types";
+import { parseFilterParams, applyFiltersToQuery } from "@/lib/filter-utils";
+import type { LogsResponse, SortField, SortOrder } from "@/types";
+
+/**
+ * Map API sort field keys to database column names.
+ */
+const SORT_COLUMN_MAP: Record<SortField, string> = {
+  timestamp: "timestamp",
+  service: "service_name",
+  status: "status_code",
+  latency: "latency_ms",
+  agent: "agent",
+  region: "region",
+};
 
 /**
  * GET /api/logs
  *
- * Fetches monitoring check logs with pagination and date filtering.
- *
- * Query parameters:
- * - page (default: 1)
- * - page_size (default: 50, max: 200)
- * - date: single date filter (YYYY-MM-DD) — shows logs for that entire day
- * - date_from: range start (YYYY-MM-DD)
- * - date_to: range end (YYYY-MM-DD)
- * - service_id: filter by service
- *
- * If both `date` and `date_from`/`date_to` are provided, `date` takes precedence.
+ * Fetches monitoring check logs with server-side pagination, date & time filtering,
+ * and column sorting.
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+
+    // Parse and validate date/time/service filters
+    const filterParams = parseFilterParams(searchParams);
+    if (filterParams.validationError) {
+      return NextResponse.json(
+        { error: filterParams.validationError },
+        { status: 400 }
+      );
+    }
 
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const pageSize = Math.min(
       200,
       Math.max(1, parseInt(searchParams.get("page_size") || "50", 10))
     );
-    const singleDate = searchParams.get("date");
-    const dateFrom = searchParams.get("date_from");
-    const dateTo = searchParams.get("date_to");
-    const serviceId = searchParams.get("service_id");
+
+    // Sorting parameters
+    const rawSortBy = searchParams.get("sort_by")?.toLowerCase() as SortField;
+    const sortBy: SortField = rawSortBy && SORT_COLUMN_MAP[rawSortBy] ? rawSortBy : "timestamp";
+    const rawSortOrder = searchParams.get("sort_order")?.toLowerCase();
+    const sortOrder: SortOrder = rawSortOrder === "asc" ? "asc" : "desc";
 
     const supabase = createServerSupabaseClient();
 
-    // Build query
+    // Base query
     let query = supabase
       .from("monitoring_checks")
       .select("*", { count: "exact" });
 
-    // Apply date filters
-    if (singleDate) {
-      // Single date: filter for the entire day in UTC
-      const dayStart = `${singleDate}T00:00:00.000Z`;
-      const dayEnd = `${singleDate}T23:59:59.999Z`;
-      query = query.gte("timestamp", dayStart).lte("timestamp", dayEnd);
-    } else {
-      if (dateFrom) {
-        query = query.gte("timestamp", `${dateFrom}T00:00:00.000Z`);
-      }
-      if (dateTo) {
-        query = query.lte("timestamp", `${dateTo}T23:59:59.999Z`);
-      }
+    // Apply date/time/service filters
+    query = applyFiltersToQuery(query, filterParams);
+
+    // Apply server-side ordering
+    const dbColumn = SORT_COLUMN_MAP[sortBy];
+    query = query.order(dbColumn, {
+      ascending: sortOrder === "asc",
+      nullsFirst: false,
+    });
+
+    // Secondary sort tiebreaker for deterministic pagination
+    if (sortBy !== "timestamp") {
+      query = query.order("timestamp", { ascending: false });
     }
 
-    // Apply service filter
-    if (serviceId) {
-      query = query.eq("service_id", serviceId);
-    }
-
-    // Order by timestamp descending (most recent first)
-    query = query.order("timestamp", { ascending: false });
-
-    // Apply pagination
+    // Apply pagination range
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     query = query.range(from, to);
@@ -85,6 +92,8 @@ export async function GET(request: NextRequest) {
       page,
       page_size: pageSize,
       total_pages: totalPages,
+      sort_by: sortBy,
+      sort_order: sortOrder,
     };
 
     return NextResponse.json(response, { status: 200 });
