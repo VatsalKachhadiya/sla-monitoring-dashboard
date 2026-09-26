@@ -20,18 +20,38 @@ export async function GET() {
   try {
     const supabase = createServerSupabaseClient();
 
-    // Fetch all monitoring checks
-    const { data: checks, error } = await supabase
-      .from("monitoring_checks")
-      .select("*")
-      .order("timestamp", { ascending: true });
+    // Fetch all monitoring checks across all pages (bypasses PostgREST 1000 row default limit)
+    // Only select columns needed for SLA calculations to minimize bandwidth
+    const checks: any[] = [];
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    let hasMore = true;
 
-    if (error) {
-      console.error("Error fetching checks:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch monitoring data" },
-        { status: 500 }
-      );
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from("monitoring_checks")
+        .select("upload_id, service_id, service_name, timestamp, status_code, latency_ms, is_healthy")
+        .order("timestamp", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error("Error fetching checks:", error);
+        return NextResponse.json(
+          { error: "Failed to fetch monitoring data" },
+          { status: 500 }
+        );
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        checks.push(...data);
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          from += PAGE_SIZE;
+        }
+      }
     }
 
     if (!checks || checks.length === 0) {
