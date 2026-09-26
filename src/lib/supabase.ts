@@ -5,8 +5,14 @@ import { createClient } from "@supabase/supabase-js";
  * This has elevated privileges and must NEVER be exposed to the browser.
  * Use this in API routes / serverless functions only.
  */
+function sanitizeUrl(url?: string): string {
+  if (!url) return "";
+  return url.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+}
+
 export function createServerSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = sanitizeUrl(rawUrl);
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -25,7 +31,7 @@ export function createServerSupabaseClient() {
  * Safe to use in client components for read-only queries.
  */
 export function createBrowserSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = sanitizeUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
