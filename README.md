@@ -6,9 +6,10 @@ A production-grade, full-stack SLA monitoring and incident analysis dashboard bu
 
 ## 1. Live Deployment & Repository
 
-- **Live URL:** [Deployed on Vercel](https://sla-monitoring-dashboard-earthre.vercel.app) *(Replace with actual deployed Vercel domain)*
+- **Live Dashboard:** [https://sla-monitoring-dashboard-vatsal.vercel.app/dashboard](https://sla-monitoring-dashboard-vatsal.vercel.app/dashboard)
+- **Live Upload Portal:** [https://sla-monitoring-dashboard-vatsal.vercel.app](https://sla-monitoring-dashboard-vatsal.vercel.app)
 - **GitHub Repository:** [sla-monitoring-dashboard](https://github.com/VatsalKachhadiya/sla-monitoring-dashboard)
-- **Last Verified Live:** September 2026
+- **Last Verified Live:** September 2026 (Connected to Supabase PostgreSQL, 4,664 health checks ingested)
 
 ---
 
