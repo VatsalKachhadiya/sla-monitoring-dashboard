@@ -46,3 +46,10 @@ CREATE POLICY "Allow all operations" ON monitoring_checks
   FOR ALL
   USING (true)
   WITH CHECK (true);
+
+-- Grant permissions to roles
+GRANT ALL ON TABLE monitoring_checks TO postgres, anon, authenticated, service_role;
+GRANT ALL ON SEQUENCE monitoring_checks_id_seq TO postgres, anon, authenticated, service_role;
+
+-- Reload PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
